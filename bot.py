@@ -138,6 +138,7 @@ def handle_help(message):
         "👋 Bot d'indexation de domaines\n\n"
         "- Envoyez un fichier .txt (max 50 MB) pour indexation.\n"
         "- Ou envoyez un lien GoFile de dossier: https://gofile.io/d/XXXXXX\n"
+        "- Ou un lien direct GoFile: https://storeX.gofile.io/...txt\n"
         "- Cherchez avec: /search motcle\n"
         "- Test: ping"
     )
@@ -175,6 +176,22 @@ def handle_gofile_link(message):
     bot.send_message(message.chat.id, "⏳ Traitement du dossier GoFile...")
     handle_gofile_folder(content_id, message.chat.id)
 
+@bot.message_handler(regexp=r'^https?://store\d+\.gofile\.io/download/')
+def handle_direct_gofile_download(message):
+    url = message.text.strip()
+    file_name = url.split("/")[-1].split("?")[0] or "downloaded.txt"
+    bot.send_message(message.chat.id, f"⏳ Téléchargement du fichier GoFile : <code>{file_name}</code>")
+    try:
+        size = download_stream_to_file(url, file_name)
+        cur.execute(
+            "INSERT INTO files (file_name, file_size, source, source_ref) VALUES (%s, %s, %s, %s)",
+            (file_name, size, "gofile-direct", url)
+        )
+        index_domains_from_file(file_name)
+        bot.send_message(message.chat.id, f"✅ Fichier téléchargé et indexé : <code>{file_name}</code> ({size//1024} KB)")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Erreur lors du téléchargement : {e}")
+
 @bot.message_handler(content_types=["document"])
 def handle_document(message):
     doc = message.document
@@ -184,7 +201,7 @@ def handle_document(message):
     if doc.file_size and doc.file_size > MAX_TG_FILE_SIZE:
         bot.send_message(
             message.chat.id,
-            "❌ Fichier trop volumineux (50 MB max). Uploadez sur GoFile et envoyez le lien du dossier."
+            "❌ Fichier trop volumineux (50 MB maximum). Uploadez sur GoFile et envoyez le lien du dossier."
         )
         return
     try:
