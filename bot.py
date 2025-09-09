@@ -1,13 +1,19 @@
 import os
 import telebot
+from flask import Flask
+import threading
 
-# Récupération des variables d'environnement
+# =========================
+# Variables d'environnement
+# =========================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")  # Exemple: -1001234567890
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))  # Exemple: -1001234567890
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Handler pour les documents envoyés dans le channel
+# =========================
+# Gestion des documents
+# =========================
 @bot.message_handler(content_types=['document'])
 def handle_document(message):
     try:
@@ -16,7 +22,7 @@ def handle_document(message):
             bot.send_message(chat_id=CHANNEL_ID, text="⚠️ Seuls les fichiers .txt sont acceptés.")
             return
 
-        # Récupération des infos et téléchargement
+        # Récupération du fichier
         file_info = bot.get_file(message.document.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         file_name = message.document.file_name
@@ -35,12 +41,35 @@ def handle_document(message):
         bot.send_message(chat_id=CHANNEL_ID, text=f"❌ Erreur lors de l'enregistrement: {e}")
 
 
-# Petit test pour répondre aux messages texte (ping → pong)
+# =========================
+# Gestion des messages texte
+# =========================
 @bot.message_handler(func=lambda m: m.text and m.text.lower() == "ping")
 def handle_ping(message):
     bot.reply_to(message, "pong 🏓")
 
 
-# Lancement du bot
-print("🤖 Bot started and listening...")
-bot.polling(none_stop=True)
+# =========================
+# Flask Healthcheck pour Koyeb
+# =========================
+app = Flask(__name__)
+
+@app.route("/")
+def health():
+    return "OK", 200
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+# =========================
+# Main
+# =========================
+if __name__ == "__main__":
+    print("🤖 Bot started and listening...")
+
+    # Lancer Flask dans un thread
+    threading.Thread(target=run_flask).start()
+
+    # Lancer le bot en mode polling
+    bot.polling(none_stop=True)
