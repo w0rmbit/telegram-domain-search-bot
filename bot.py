@@ -1,41 +1,46 @@
-from flask import Flask
+import os
 import telebot
-from config import BOT_TOKEN
-from db import init_db, save_file, get_all_files
-from search import search_domain
+
+# Récupération des variables d'environnement
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")  # Exemple: -1001234567890
 
 bot = telebot.TeleBot(BOT_TOKEN)
-app = Flask(__name__)
 
-init_db()
+# Handler pour les documents envoyés dans le channel
+@bot.message_handler(content_types=['document'])
+def handle_document(message):
+    try:
+        # Vérifie si c'est bien un .txt
+        if not message.document.file_name.endswith(".txt"):
+            bot.send_message(chat_id=CHANNEL_ID, text="⚠️ Seuls les fichiers .txt sont acceptés.")
+            return
 
-@bot.channel_post_handler(content_types=['document'])
-def handle_channel_file(message):
-    file_id = message.document.file_id
-    file_name = message.document.file_name
-    file_size = message.document.file_size
-    save_file(file_id, file_name, file_size)
-    print(f"Saved file: {file_name}")
-# Après avoir téléchargé et sauvegardé le fichier
-with open(file_name, "wb") as f:
-    f.write(file_content)
-print(f"Saved file: {file_name}")
+        # Récupération des infos et téléchargement
+        file_info = bot.get_file(message.document.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        file_name = message.document.file_name
 
-# ✅ Ajoute ce test ici
-bot.send_message(chat_id=CHANNEL_ID, text="✅ Fichier reçu et enregistré !")
+        # Sauvegarde locale
+        with open(file_name, "wb") as f:
+            f.write(downloaded_file)
 
-@bot.message_handler(commands=['search'])
-def handle_search(message):
-    domain = message.text.split(maxsplit=1)[-1].strip()
-    files = get_all_files()
-    if not files:
-        bot.send_message(message.chat.id, "No files available.")
-        return
-    search_domain(bot, domain, files, message.chat.id)
+        print(f"✅ Saved file: {file_name}")
 
-@app.route('/')
-def health():
-    return "Bot is running."
+        # Confirmation dans le channel
+        bot.send_message(chat_id=CHANNEL_ID, text=f"✅ Fichier reçu et enregistré : {file_name}")
 
-if __name__ == "__main__":
-    bot.polling()
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        bot.send_message(chat_id=CHANNEL_ID, text=f"❌ Erreur lors de l'enregistrement: {e}")
+
+
+# Petit test pour répondre aux messages texte (ping → pong)
+@bot.message_handler(func=lambda m: m.text and m.text.lower() == "ping")
+def handle_ping(message):
+    bot.reply_to(message, "pong 🏓")
+
+
+# Lancement du bot
+print("🤖 Bot started and listening...")
+bot.polling(none_stop=True)
