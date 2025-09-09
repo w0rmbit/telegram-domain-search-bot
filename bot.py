@@ -16,6 +16,13 @@ def handle_channel_file(message):
     file_size = message.document.file_size
     save_file(file_id, file_name, file_size)
     print(f"Saved file: {file_name}")
+# Après avoir téléchargé et sauvegardé le fichier
+with open(file_name, "wb") as f:
+    f.write(file_content)
+print(f"Saved file: {file_name}")
+
+# ✅ Ajoute ce test ici
+bot.send_message(chat_id=CHANNEL_ID, text="✅ Fichier reçu et enregistré !")
 
 @bot.message_handler(commands=['search'])
 def handle_search(message):
